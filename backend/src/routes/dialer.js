@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createSession, getSessionState, stopSession, hasRunningSession, getAgentSessions } from '../engine/DialerEngine.js';
+import { createSession, createSessionAndWait, getSessionState, stopSession, hasRunningSession, getAgentSessions } from '../engine/DialerEngine.js';
 import { dialerLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
@@ -16,8 +16,8 @@ router.get('/sessions', async (req, res) => {
   }
 });
 
-// POST /dialer/sessions — create and start a dialer session
-router.post('/sessions', dialerLimiter, (req, res) => {
+// POST /dialer/sessions — create and run a dialer session to completion
+router.post('/sessions', dialerLimiter, async (req, res) => {
   const agentId = req.user.userId;
   const { leadIds } = req.body;
 
@@ -29,8 +29,12 @@ router.post('/sessions', dialerLimiter, (req, res) => {
     return res.status(409).json({ detail: 'You already have a running session' });
   }
 
-  const session = createSession(agentId, leadIds);
-  res.status(201).json(session);
+  try {
+    const sessionState = await createSessionAndWait(agentId, leadIds);
+    res.status(201).json(sessionState);
+  } catch (err) {
+    res.status(500).json({ detail: err.message });
+  }
 });
 
 // GET /dialer/sessions/:id — get session state (polled by frontend)

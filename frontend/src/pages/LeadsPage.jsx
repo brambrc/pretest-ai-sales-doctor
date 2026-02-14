@@ -79,7 +79,7 @@ function LeadsPage() {
     setStarting(true);
     try {
       const res = await createDialerSession(Array.from(selectedIds));
-      navigate(`/dialer/${res.data.id}`);
+      navigate(`/dialer/${res.data.id}`, { state: { session: res.data } });
     } catch (err) {
       if (err.response?.status === 409) {
         alert('You already have a running session. Stop it first.');

@@ -40,7 +40,7 @@ describe('Dialer routes', () => {
   });
 
   describe('POST /dialer/sessions', () => {
-    it('creates a session', async () => {
+    it('creates and completes a session', async () => {
       const res = await request(app)
         .post('/dialer/sessions')
         .set('Authorization', `Bearer ${token}`)
@@ -48,10 +48,11 @@ describe('Dialer routes', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.id).toBeTruthy();
-      expect(res.body.status).toBe('RUNNING');
-      expect(res.body.concurrency).toBe(2);
-      expect(res.body.activeCallIds).toBeInstanceOf(Array);
-    });
+      expect(res.body.status).toBe('STOPPED');
+      expect(res.body.calls).toBeInstanceOf(Array);
+      expect(res.body.calls.length).toBeGreaterThan(0);
+      expect(res.body.metrics.attempted).toBeGreaterThan(0);
+    }, 15000);
 
     it('returns 400 without leadIds', async () => {
       const res = await request(app)
@@ -66,7 +67,7 @@ describe('Dialer routes', () => {
 
   describe('GET /dialer/sessions/:id', () => {
     it('returns session state', async () => {
-      // Create a session first
+      // Create a session first (awaits completion)
       const createRes = await request(app)
         .post('/dialer/sessions')
         .set('Authorization', `Bearer ${token}`)
@@ -80,16 +81,15 @@ describe('Dialer routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(sessionId);
       expect(res.body.calls).toBeInstanceOf(Array);
-      // Enriched calls should have leadName
       if (res.body.calls.length > 0) {
         expect(res.body.calls[0].leadName).toBeTruthy();
       }
-    });
+    }, 15000);
   });
 
   describe('POST /dialer/sessions/:id/stop', () => {
     it('stops a session', async () => {
-      // Create a session first
+      // Session is already completed after POST
       const createRes = await request(app)
         .post('/dialer/sessions')
         .set('Authorization', `Bearer ${token}`)
@@ -102,26 +102,16 @@ describe('Dialer routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('STOPPED');
-    });
+    }, 15000);
   });
 
   describe('GET /dialer/sessions', () => {
     it('lists agent sessions', async () => {
-      // Create a session first
+      // Create a session (completes automatically)
       await request(app)
         .post('/dialer/sessions')
         .set('Authorization', `Bearer ${token}`)
         .send({ leadIds: leadIds.slice(0, 3) });
-
-      // Stop it so we can verify listing works
-      // (hasRunningSession would block creating a second session)
-      const sessionsArr = Array.from(sessions.values());
-      if (sessionsArr.length > 0) {
-        // Stop the first session to allow the list endpoint to be clean
-        await request(app)
-          .post(`/dialer/sessions/${sessionsArr[0].id}/stop`)
-          .set('Authorization', `Bearer ${token}`);
-      }
 
       const res = await request(app)
         .get('/dialer/sessions')
@@ -131,6 +121,6 @@ describe('Dialer routes', () => {
       expect(res.body.sessions).toBeInstanceOf(Array);
       expect(res.body.sessions.length).toBeGreaterThanOrEqual(1);
       expect(res.body.total).toBeGreaterThanOrEqual(1);
-    });
+    }, 15000);
   });
 });

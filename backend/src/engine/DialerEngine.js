@@ -147,7 +147,7 @@ function startCall(leadId, sessionId) {
  * Simulate a call with random duration and outcome.
  */
 function simulateCall(call, session) {
-  const duration = randomInt(3000, 8000);
+  const duration = randomInt(1000, 3000);
   const timer = setTimeout(() => {
     callTimers.delete(call.id);
     const outcome = weightedRandom(CALL_OUTCOMES);
@@ -296,6 +296,41 @@ async function syncCrmActivity(call, session) {
     call.crmActivityStatus = 'FAILED';
   }
   emitSessionUpdate(session);
+}
+
+/**
+ * Create a session and wait for it to complete before returning.
+ * Used on serverless (Vercel) where setTimeout callbacks must finish
+ * within the same request.
+ */
+export function createSessionAndWait(agentId, leadIds) {
+  return new Promise((resolve) => {
+    const session = createSession(agentId, leadIds);
+
+    // If session finished immediately (e.g. no valid leads)
+    if (session.status === 'STOPPED') {
+      setTimeout(() => resolve(getSessionState(session.id)), 300);
+      return;
+    }
+
+    const handler = ({ sessionId }) => {
+      if (sessionId === session.id) {
+        dialerEventBus.removeListener('SESSION_STOPPED', handler);
+        // Small delay to let CRM sync finish
+        setTimeout(() => resolve(getSessionState(session.id)), 500);
+      }
+    };
+    dialerEventBus.on('SESSION_STOPPED', handler);
+
+    // Safety: force-stop after 9s (Vercel has 10s limit)
+    setTimeout(() => {
+      dialerEventBus.removeListener('SESSION_STOPPED', handler);
+      if (session.status === 'RUNNING') {
+        stopSession(session.id);
+      }
+      resolve(getSessionState(session.id));
+    }, 9000);
+  });
 }
 
 function emitSessionUpdate(session) {

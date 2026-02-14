@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import { getDialerSession, stopDialerSession, transcribeCall } from '../api';
 import { usePolling } from '../hooks/usePolling';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -8,9 +8,12 @@ import SessionMetrics from '../components/SessionMetrics';
 
 function DialerPage() {
   const { sessionId } = useParams();
-  const [session, setSession] = useState(null);
+  const location = useLocation();
+  const [session, setSession] = useState(location.state?.session || null);
   const [error, setError] = useState(null);
   const [stopping, setStopping] = useState(false);
+
+  const isRunning = session?.status === 'RUNNING';
 
   const fetchSession = useCallback(async () => {
     try {
@@ -18,19 +21,24 @@ function DialerPage() {
       setSession(res.data);
       setError(null);
     } catch (err) {
-      setError('Failed to load session');
+      // On serverless, session may not exist in memory — if we already
+      // have session data from navigation state, just keep it
+      if (!session) {
+        setError('Failed to load session');
+      }
     }
-  }, [sessionId]);
+  }, [sessionId, session]);
 
-  // Try WebSocket first, fall back to polling
-  const { fallbackToPolling } = useWebSocket(sessionId, (data) => {
-    if (data.state) {
-      setSession(data.state);
+  // Only try WebSocket if session is still running
+  const { fallbackToPolling } = useWebSocket(
+    isRunning ? sessionId : null,
+    (data) => {
+      if (data.state) setSession(data.state);
     }
-  });
+  );
 
-  const isRunning = session?.status === 'RUNNING';
-  usePolling(fetchSession, 1500, fallbackToPolling || !session);
+  // Poll if: no session data yet (direct URL visit) OR session is running and WS failed
+  usePolling(fetchSession, 1500, !session || (isRunning && fallbackToPolling));
 
   const handleStop = async () => {
     setStopping(true);
@@ -46,14 +54,13 @@ function DialerPage() {
   const handleTranscribe = async (callId) => {
     try {
       await transcribeCall(callId);
-      // Refresh session to get updated transcription status
       setTimeout(fetchSession, 2000);
     } catch (err) {
       console.error('Failed to start transcription:', err);
     }
   };
 
-  if (error) {
+  if (error && !session) {
     return (
       <div className="page dialer-page">
         <p className="error">{error}</p>
@@ -66,9 +73,7 @@ function DialerPage() {
     return <div className="page dialer-page"><p>Loading session...</p></div>;
   }
 
-  // Active calls are those currently RINGING
   const activeCalls = session.calls.filter((c) => c.status === 'RINGING');
-  // Completed calls
   const completedCalls = session.calls.filter((c) => c.status === 'COMPLETED');
 
   return (
