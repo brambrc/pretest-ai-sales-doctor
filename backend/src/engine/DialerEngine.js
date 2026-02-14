@@ -3,6 +3,7 @@ import { calls, sessions, leads } from '../store/index.js';
 import { weightedRandom, randomInt } from '../utils/random.js';
 import { createActivity } from '../services/MockCRMService.js';
 import { dialerEventBus } from '../events/DialerEventBus.js';
+import { getLeadById } from '../dal/leads.js';
 
 // Track active timeouts so we can cancel them on manual stop
 const callTimers = new Map();
@@ -302,8 +303,18 @@ async function syncCrmActivity(call, session) {
  * Create a session and wait for it to complete before returning.
  * Used on serverless (Vercel) where setTimeout callbacks must finish
  * within the same request.
+ * Pre-fetches leads from the DAL so the engine can find them in the Map.
  */
-export function createSessionAndWait(agentId, leadIds) {
+export async function createSessionAndWait(agentId, leadIds) {
+  // Pre-fetch leads from DAL (Postgres) into the in-memory Map
+  // so the engine's leads.get() calls work on serverless
+  for (const leadId of leadIds) {
+    if (!leads.has(leadId)) {
+      const lead = await getLeadById(leadId);
+      if (lead) leads.set(leadId, lead);
+    }
+  }
+
   return new Promise((resolve) => {
     const session = createSession(agentId, leadIds);
 

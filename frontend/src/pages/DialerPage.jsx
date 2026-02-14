@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { getDialerSession, stopDialerSession, transcribeCall } from '../api';
 import { usePolling } from '../hooks/usePolling';
@@ -6,14 +6,37 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import CallCard from '../components/CallCard';
 import SessionMetrics from '../components/SessionMetrics';
 
+// Cache sessions in localStorage so session history can view them
+function cacheSession(session) {
+  if (!session?.id) return;
+  try {
+    const cache = JSON.parse(localStorage.getItem('sessionCache') || '{}');
+    cache[session.id] = session;
+    localStorage.setItem('sessionCache', JSON.stringify(cache));
+  } catch { /* ignore */ }
+}
+
+function getCachedSession(sessionId) {
+  try {
+    const cache = JSON.parse(localStorage.getItem('sessionCache') || '{}');
+    return cache[sessionId] || null;
+  } catch { return null; }
+}
+
 function DialerPage() {
   const { sessionId } = useParams();
   const location = useLocation();
-  const [session, setSession] = useState(location.state?.session || null);
+  const initialSession = location.state?.session || getCachedSession(sessionId);
+  const [session, setSession] = useState(initialSession);
   const [error, setError] = useState(null);
   const [stopping, setStopping] = useState(false);
 
   const isRunning = session?.status === 'RUNNING';
+
+  // Cache session whenever it updates
+  useEffect(() => {
+    if (session) cacheSession(session);
+  }, [session]);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -22,7 +45,7 @@ function DialerPage() {
       setError(null);
     } catch (err) {
       // On serverless, session may not exist in memory — if we already
-      // have session data from navigation state, just keep it
+      // have session data from nav state or cache, just keep it
       if (!session) {
         setError('Failed to load session');
       }
