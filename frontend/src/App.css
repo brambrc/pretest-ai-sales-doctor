@@ -34,6 +34,17 @@ body {
   max-width: 600px;
 }
 
+.page.dialer-page {
+  width: 100%;
+  max-width: 1000px;
+}
+
+.page.auth-page {
+  width: 100%;
+  max-width: 400px;
+  margin-top: 60px;
+}
+
 .lead-form {
   width: 100%;
 }
@@ -49,18 +60,95 @@ body {
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.user-info {
+  font-size: 14px;
+  color: #6c757d;
+}
+
 .btn-primary {
   background: #007bff;
   color: white;
   padding: 10px 20px;
   border-radius: 4px;
   text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .btn-primary:hover {
   background: #0056b3;
 }
 
+.btn-dialer {
+  background: #28a745;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.btn-dialer:hover:not(:disabled) {
+  background: #218838;
+}
+
+.btn-dialer:disabled {
+  background: #ccc;
+  cursor: default;
+}
+
+.btn-stop {
+  background: #dc3545;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.btn-stop:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn-stop:disabled {
+  background: #ccc;
+  cursor: default;
+}
+
+.btn-logout {
+  background: #6c757d;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-logout:hover {
+  background: #5a6268;
+}
+
+.btn-view {
+  color: #007bff;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.btn-view:hover {
+  text-decoration: underline;
+}
 
 .filter-bar {
   display: flex;
@@ -83,11 +171,25 @@ body {
   cursor: pointer;
 }
 
+.filter-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
 
+.sort-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+/* Lead Table */
 .lead-table {
   width: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
   border-collapse: collapse;
   background: white;
 }
@@ -110,6 +212,21 @@ body {
   background: #f8f9fa;
 }
 
+.lead-table tr.selected-row {
+  background: #e8f4fd;
+}
+
+.lead-table .checkbox-col {
+  width: 40px;
+  text-align: center;
+}
+
+.lead-table .checkbox-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 .lead-table button {
   padding: 6px 12px;
   background: #28a745;
@@ -125,6 +242,35 @@ body {
   cursor: default;
 }
 
+/* Priority Badges */
+.priority-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.priority-badge.high {
+  background: #d4edda;
+  color: #155724;
+}
+
+.priority-badge.medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.priority-badge.low {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.priority-badge.none {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+/* Lead Form */
 .lead-form {
   max-width: 500px;
 }
@@ -171,12 +317,433 @@ body {
   background: #ccc;
 }
 
-
-.lead-form button:disabled {
-  background: #ccc;
-}
-
 .page h1 {
   color: #333;
   margin-bottom: 24px;
+}
+
+/* Auth Pages */
+.auth-form {
+  margin-top: 16px;
+}
+
+.auth-form .btn-primary {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.auth-link {
+  margin-top: 16px;
+  text-align: center;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.auth-link a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.auth-link a:hover {
+  text-decoration: underline;
+}
+
+/* Session Status Badge */
+.session-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.session-status.running {
+  background: #d4edda;
+  color: #155724;
+}
+
+.session-status.stopped {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Session Metrics */
+.session-metrics {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric {
+  flex: 1;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid #dee2e6;
+}
+
+.metric-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: #333;
+}
+
+.metric-label {
+  display: block;
+  font-size: 12px;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.metric-connected .metric-value {
+  color: #28a745;
+}
+
+.metric-failed .metric-value {
+  color: #dc3545;
+}
+
+.metric-canceled .metric-value {
+  color: #ffc107;
+}
+
+/* Active Lines */
+.active-lines-section {
+  margin-bottom: 32px;
+}
+
+.active-lines-section h2 {
+  color: #333;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.call-cards {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.completed-cards {
+  flex-wrap: wrap;
+}
+
+.completed-calls-section {
+  margin-top: 32px;
+}
+
+.completed-calls-section h2 {
+  color: #333;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.no-active-calls {
+  flex: 1;
+  padding: 32px;
+  text-align: center;
+  color: #6c757d;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px dashed #dee2e6;
+}
+
+/* Call Card */
+.call-card {
+  flex: 1;
+  min-width: 280px;
+  border-radius: 8px;
+  padding: 20px;
+  border: 2px solid #dee2e6;
+  position: relative;
+  overflow: hidden;
+}
+
+.call-card.ringing {
+  border-color: #007bff;
+  background: #f0f7ff;
+}
+
+.call-card.connected {
+  border-color: #28a745;
+  background: #f0fff4;
+}
+
+.call-card.failed {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.call-card.canceled {
+  border-color: #ffc107;
+  background: #fffbf0;
+}
+
+.call-card.winner {
+  border-color: #28a745;
+  border-width: 3px;
+  box-shadow: 0 0 12px rgba(40, 167, 69, 0.3);
+}
+
+.call-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.call-line-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6c757d;
+}
+
+.call-status-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.call-status-badge.ringing {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.call-status-badge.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.call-status-badge.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.call-status-badge.canceled {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.call-card-body {
+  margin-bottom: 8px;
+}
+
+.call-lead-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.call-lead-phone {
+  font-size: 14px;
+  color: #6c757d;
+  margin-bottom: 2px;
+}
+
+.call-lead-company {
+  font-size: 13px;
+  color: #999;
+}
+
+/* Recording & Transcription */
+.call-recording {
+  margin-top: 12px;
+}
+
+.call-recording audio {
+  width: 100%;
+  height: 32px;
+}
+
+.call-transcription {
+  margin-top: 8px;
+}
+
+.transcription-text {
+  font-size: 13px;
+  color: #555;
+  background: #f8f9fa;
+  padding: 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.transcription-status {
+  font-size: 12px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.btn-transcribe {
+  padding: 4px 10px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-transcribe:hover {
+  background: #5a6268;
+}
+
+/* Ringing animation */
+.call-ringing-indicator {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #007bff;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.dot-2 {
+  animation-delay: 0.2s;
+}
+
+.dot-3 {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Call Log Table */
+.call-log-section h2 {
+  color: #333;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.call-log-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.call-log-table th,
+.call-log-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+
+.call-log-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #6c757d;
+}
+
+.call-log-table tr.winner-row {
+  background: #f0fff4;
+}
+
+.call-log-table .empty-row {
+  text-align: center;
+  color: #999;
+  padding: 24px;
+}
+
+/* Outcome badges */
+.outcome-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.outcome-badge.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.outcome-badge.no-answer {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.outcome-badge.busy {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.outcome-badge.voicemail {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.outcome-badge.canceled-by-dialer {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+/* CRM Activity Status */
+.call-crm-status {
+  margin-top: 8px;
+}
+
+.crm-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.crm-badge.synced {
+  background: #d4edda;
+  color: #155724;
+}
+
+.crm-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.crm-badge.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Session History */
+.session-history {
+  margin-top: 32px;
+}
+
+.session-history h2 {
+  color: #333;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.error {
+  color: #dc3545;
+  margin-bottom: 16px;
 }

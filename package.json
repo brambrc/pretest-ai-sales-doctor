@@ -1,0 +1,16 @@
+{
+  "name": "lead-management-app",
+  "private": true,
+  "scripts": {
+    "install": "cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "test": "cd backend && npm test && cd ../frontend && npm test",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+}
