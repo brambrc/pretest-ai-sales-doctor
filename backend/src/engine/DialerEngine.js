@@ -83,6 +83,7 @@ export function createSession(agentId, leadIds) {
  */
 function processQueue(session) {
   if (session.status !== 'RUNNING') return;
+  console.log('[Dialer] processQueue:', { queueLen: session.leadQueue.length, activeLen: session.activeCallIds.length, concurrency: session.concurrency });
 
   while (
     session.activeCallIds.length < session.concurrency &&
@@ -90,6 +91,7 @@ function processQueue(session) {
   ) {
     const leadId = session.leadQueue.shift();
     const lead = leads.get(leadId);
+    console.log(`[Dialer] processQueue lead ${leadId}: found=${!!lead}`);
     if (!lead) continue;
 
     const call = startCall(leadId, session.id);
@@ -308,15 +310,25 @@ async function syncCrmActivity(call, session) {
 export async function createSessionAndWait(agentId, leadIds) {
   // Pre-fetch leads from DAL (Postgres) into the in-memory Map
   // so the engine's leads.get() calls work on serverless
+  console.log('[Dialer] createSessionAndWait called with', { agentId, leadIds, leadsMapSize: leads.size });
   for (const leadId of leadIds) {
-    if (!leads.has(leadId)) {
-      const lead = await getLeadById(leadId);
-      if (lead) leads.set(leadId, lead);
+    const alreadyHas = leads.has(leadId);
+    console.log(`[Dialer] Pre-fetch lead ${leadId}: alreadyInMap=${alreadyHas}`);
+    if (!alreadyHas) {
+      try {
+        const lead = await getLeadById(leadId);
+        console.log(`[Dialer] getLeadById result:`, lead ? { id: lead.id, name: lead.name } : null);
+        if (lead) leads.set(leadId, lead);
+      } catch (err) {
+        console.error(`[Dialer] getLeadById error for ${leadId}:`, err.message);
+      }
     }
   }
+  console.log('[Dialer] After pre-fetch, leadsMapSize:', leads.size);
 
   return new Promise((resolve) => {
     const session = createSession(agentId, leadIds);
+    console.log('[Dialer] Session created:', { id: session.id, status: session.status, queueLen: session.leadQueue.length, callsLen: session.calls.length, metrics: session.metrics });
 
     // If session finished immediately (e.g. no valid leads)
     if (session.status === 'STOPPED') {

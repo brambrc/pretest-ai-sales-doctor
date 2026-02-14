@@ -30,9 +30,12 @@ router.post('/sessions', dialerLimiter, async (req, res) => {
   }
 
   try {
+    console.log('[Route] POST /dialer/sessions:', { agentId, leadIds });
     const sessionState = await createSessionAndWait(agentId, leadIds);
+    console.log('[Route] Session result:', { id: sessionState?.id, status: sessionState?.status, callsCount: sessionState?.calls?.length, metrics: sessionState?.metrics });
     res.status(201).json(sessionState);
   } catch (err) {
+    console.error('[Route] POST /dialer/sessions error:', err.message);
     res.status(500).json({ detail: err.message });
   }
 });
