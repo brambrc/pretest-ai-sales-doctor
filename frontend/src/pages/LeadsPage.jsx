@@ -14,7 +14,6 @@ function LeadsPage() {
   const [filters, setFilters] = useState({ industry: '', headcount: '' });
   const [options, setOptions] = useState({ industries: [], headcounts: [] });
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [starting, setStarting] = useState(false);
   const [pastSessions, setPastSessions] = useState([]);
   const [sortByPriority, setSortByPriority] = useState(false);
 
@@ -74,20 +73,10 @@ function LeadsPage() {
     }
   };
 
-  const handleStartDialer = async () => {
+  const handleStartDialer = () => {
     if (selectedIds.size === 0) return;
-    setStarting(true);
-    try {
-      const res = await createDialerSession(Array.from(selectedIds));
-      navigate(`/dialer/${res.data.id}`, { state: { session: res.data } });
-    } catch (err) {
-      if (err.response?.status === 409) {
-        alert('You already have a running session. Stop it first.');
-      } else {
-        console.error('Failed to start dialer session:', err);
-      }
-      setStarting(false);
-    }
+    // Navigate immediately — DialerPage will create the session
+    navigate('/dialer/new', { state: { leadIds: Array.from(selectedIds) } });
   };
 
   return (
@@ -99,9 +88,9 @@ function LeadsPage() {
           <button
             className="btn-dialer"
             onClick={handleStartDialer}
-            disabled={selectedIds.size === 0 || starting}
+            disabled={selectedIds.size === 0}
           >
-            {starting ? 'Starting...' : `Start Dialer (${selectedIds.size})`}
+            {`Start Dialer (${selectedIds.size})`}
           </button>
           <Link to="/add" className="btn-primary">+ Add Lead</Link>
           <button className="btn-logout" onClick={logout}>Logout</button>

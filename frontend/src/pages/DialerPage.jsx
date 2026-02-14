@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useParams, useLocation, Link } from 'react-router-dom';
-import { getDialerSession, stopDialerSession, transcribeCall } from '../api';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
+import { getDialerSession, stopDialerSession, transcribeCall, createDialerSession } from '../api';
 import { usePolling } from '../hooks/usePolling';
 import { useWebSocket } from '../hooks/useWebSocket';
 import CallCard from '../components/CallCard';
@@ -26,12 +26,42 @@ function getCachedSession(sessionId) {
 function DialerPage() {
   const { sessionId } = useParams();
   const location = useLocation();
-  const initialSession = location.state?.session || getCachedSession(sessionId);
+  const navigate = useNavigate();
+  const isNewSession = sessionId === 'new';
+  const leadIds = location.state?.leadIds;
+  const initialSession = !isNewSession ? (location.state?.session || getCachedSession(sessionId)) : null;
+
   const [session, setSession] = useState(initialSession);
   const [error, setError] = useState(null);
   const [stopping, setStopping] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const createdRef = useRef(false);
 
   const isRunning = session?.status === 'RUNNING';
+
+  // Create session if navigated with leadIds
+  useEffect(() => {
+    if (!isNewSession || !leadIds || createdRef.current) return;
+    createdRef.current = true;
+    setCreating(true);
+
+    createDialerSession(leadIds)
+      .then((res) => {
+        setSession(res.data);
+        cacheSession(res.data);
+        // Replace URL with real session ID
+        navigate(`/dialer/${res.data.id}`, { replace: true, state: { session: res.data } });
+        setCreating(false);
+      })
+      .catch((err) => {
+        if (err.response?.status === 409) {
+          setError('You already have a running session. Go back and stop it first.');
+        } else {
+          setError('Failed to create session');
+        }
+        setCreating(false);
+      });
+  }, [isNewSession, leadIds, navigate]);
 
   // Cache session whenever it updates
   useEffect(() => {
@@ -39,18 +69,17 @@ function DialerPage() {
   }, [session]);
 
   const fetchSession = useCallback(async () => {
+    if (isNewSession || creating) return;
     try {
       const res = await getDialerSession(sessionId);
       setSession(res.data);
       setError(null);
     } catch (err) {
-      // On serverless, session may not exist in memory — if we already
-      // have session data from nav state or cache, just keep it
       if (!session) {
         setError('Failed to load session');
       }
     }
-  }, [sessionId, session]);
+  }, [sessionId, session, isNewSession, creating]);
 
   // Only try WebSocket if session is still running
   const { fallbackToPolling } = useWebSocket(
@@ -61,7 +90,7 @@ function DialerPage() {
   );
 
   // Poll if: no session data yet (direct URL visit) OR session is running and WS failed
-  usePolling(fetchSession, 1500, !session || (isRunning && fallbackToPolling));
+  usePolling(fetchSession, 1500, !isNewSession && !creating && (!session || (isRunning && fallbackToPolling)));
 
   const handleStop = async () => {
     setStopping(true);
@@ -88,6 +117,55 @@ function DialerPage() {
       <div className="page dialer-page">
         <p className="error">{error}</p>
         <Link to="/" className="btn-primary">Back to Leads</Link>
+      </div>
+    );
+  }
+
+  // Show loading state while creating session
+  if (creating || (!session && isNewSession)) {
+    return (
+      <div className="page dialer-page">
+        <div className="page-header">
+          <div>
+            <h1>Dialer Session</h1>
+            <span className="session-status running">DIALING</span>
+          </div>
+          <div className="header-actions">
+            <Link to="/" className="btn-primary">Back to Leads</Link>
+          </div>
+        </div>
+
+        <SessionMetrics metrics={{ attempted: leadIds?.length || 0, connected: 0, failed: 0, canceled: 0 }} />
+
+        <div className="active-lines-section">
+          <h2>Active Lines</h2>
+          <div className="call-cards">
+            <div className="no-active-calls dialing-animation">
+              Calling {leadIds?.length || 0} leads... Please wait while calls are being placed.
+            </div>
+          </div>
+        </div>
+
+        <div className="call-log-section">
+          <h2>Call Log</h2>
+          <table className="call-log-table">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Company</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Outcome</th>
+                <th>CRM</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan="6" className="empty-row">Waiting for call results...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
