@@ -148,7 +148,7 @@ Vercel serverless functions are **stateless** with a **10s execution limit** (Ho
 - **With Neon:** if the DAL is wired to Postgres (via `DATABASE_URL`), CRUD operations work fine. The dialer engine specifically needs adaptation to work in serverless (e.g., store session state in Postgres instead of Maps).
 - **WebSocket** won't work on Vercel. The frontend already falls back to HTTP polling automatically.
 
-**For a demo/portfolio** this is fine — lead management, auth, and CRM features all work. The dialer is the one feature that needs a long-running process (Railway, Render, Fly.io) to work fully.
+**For a demo/portfolio** this is fine — lead management, auth, and CRM features all work. The dialer is the one feature that would need adaptation for serverless (e.g., moving session state to Postgres).
 
 ---
 
@@ -191,4 +191,4 @@ Vercel serverless functions are **stateless** with a **10s execution limit** (Ho
 
 ### Dialer Doesn't Complete Sessions
 - Expected on Vercel serverless — see limitations table above
-- For full dialer functionality, deploy backend on Railway/Render instead
+- Fix: adapt DialerEngine to persist session state in Postgres instead of in-memory Maps
