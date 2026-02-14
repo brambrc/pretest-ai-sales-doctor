@@ -4,6 +4,9 @@ import { weightedRandom, randomInt } from '../utils/random.js';
 import { createActivity } from '../services/MockCRMService.js';
 import { dialerEventBus } from '../events/DialerEventBus.js';
 import { getLeadById } from '../dal/leads.js';
+import { createSession as dalCreateSession, updateSession as dalUpdateSession } from '../dal/sessions.js';
+import { createCall as dalCreateCall, updateCall as dalUpdateCall } from '../dal/calls.js';
+import { useInMemory } from '../db/pool.js';
 
 // Track active timeouts so we can cancel them on manual stop
 const callTimers = new Map();
@@ -83,7 +86,6 @@ export function createSession(agentId, leadIds) {
  */
 function processQueue(session) {
   if (session.status !== 'RUNNING') return;
-  console.log('[Dialer] processQueue:', { queueLen: session.leadQueue.length, activeLen: session.activeCallIds.length, concurrency: session.concurrency });
 
   while (
     session.activeCallIds.length < session.concurrency &&
@@ -91,7 +93,6 @@ function processQueue(session) {
   ) {
     const leadId = session.leadQueue.shift();
     const lead = leads.get(leadId);
-    console.log(`[Dialer] processQueue lead ${leadId}: found=${!!lead}`);
     if (!lead) continue;
 
     const call = startCall(leadId, session.id);
@@ -310,25 +311,15 @@ async function syncCrmActivity(call, session) {
 export async function createSessionAndWait(agentId, leadIds) {
   // Pre-fetch leads from DAL (Postgres) into the in-memory Map
   // so the engine's leads.get() calls work on serverless
-  console.log('[Dialer] createSessionAndWait called with', { agentId, leadIds, leadsMapSize: leads.size });
   for (const leadId of leadIds) {
-    const alreadyHas = leads.has(leadId);
-    console.log(`[Dialer] Pre-fetch lead ${leadId}: alreadyInMap=${alreadyHas}`);
-    if (!alreadyHas) {
-      try {
-        const lead = await getLeadById(leadId);
-        console.log(`[Dialer] getLeadById result:`, lead ? { id: lead.id, name: lead.name } : null);
-        if (lead) leads.set(leadId, lead);
-      } catch (err) {
-        console.error(`[Dialer] getLeadById error for ${leadId}:`, err.message);
-      }
+    if (!leads.has(leadId)) {
+      const lead = await getLeadById(leadId);
+      if (lead) leads.set(leadId, lead);
     }
   }
-  console.log('[Dialer] After pre-fetch, leadsMapSize:', leads.size);
 
-  return new Promise((resolve) => {
+  const sessionState = await new Promise((resolve) => {
     const session = createSession(agentId, leadIds);
-    console.log('[Dialer] Session created:', { id: session.id, status: session.status, queueLen: session.leadQueue.length, callsLen: session.calls.length, metrics: session.metrics });
 
     // If session finished immediately (e.g. no valid leads)
     if (session.status === 'STOPPED') {
@@ -354,6 +345,58 @@ export async function createSessionAndWait(agentId, leadIds) {
       resolve(getSessionState(session.id));
     }, 9000);
   });
+
+  // Persist session and calls to Postgres so subsequent requests can find them
+  if (!useInMemory && sessionState) {
+    await persistToDatabase(sessionState);
+  }
+
+  return sessionState;
+}
+
+/**
+ * Persist a completed session and its calls to Postgres.
+ */
+async function persistToDatabase(sessionState) {
+  try {
+    // Persist session
+    await dalCreateSession({
+      id: sessionState.id,
+      agentId: sessionState.agentId,
+      leadQueue: sessionState.leadQueue,
+      concurrency: sessionState.concurrency,
+      status: sessionState.status,
+      metrics: sessionState.metrics,
+    });
+    await dalUpdateSession(sessionState.id, {
+      status: sessionState.status,
+      winnerCallId: sessionState.winnerCallId,
+      metrics: sessionState.metrics,
+    });
+
+    // Persist each call
+    for (const call of sessionState.calls) {
+      await dalCreateCall({
+        id: call.id,
+        leadId: call.leadId,
+        sessionId: call.sessionId,
+        status: call.status,
+        callStatus: call.callStatus,
+        providerCallId: call.providerCallId,
+        startedAt: call.startedAt,
+      });
+      await dalUpdateCall(call.id, {
+        status: call.status,
+        callStatus: call.callStatus,
+        endedAt: call.endedAt,
+        recordingUrl: call.recordingUrl,
+        transcriptionText: call.transcriptionText,
+        transcriptionStatus: call.transcriptionStatus,
+      });
+    }
+  } catch (err) {
+    console.error('[Dialer] Failed to persist session to DB:', err.message);
+  }
 }
 
 function emitSessionUpdate(session) {

@@ -1,14 +1,58 @@
 import { Router } from 'express';
-import { createSession, createSessionAndWait, getSessionState, stopSession, hasRunningSession, getAgentSessions } from '../engine/DialerEngine.js';
+import { createSessionAndWait, getSessionState, stopSession, hasRunningSession } from '../engine/DialerEngine.js';
+import { getSessionsByAgent, getSessionById } from '../dal/sessions.js';
+import { getCallsBySessionId } from '../dal/calls.js';
+import { getLeadById } from '../dal/leads.js';
+import { useInMemory } from '../db/pool.js';
 import { dialerLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
+
+/**
+ * Build enriched session state from DAL (Postgres).
+ */
+async function getSessionStateFromDB(sessionId) {
+  const session = await getSessionById(sessionId);
+  if (!session) return null;
+
+  const sessionCalls = await getCallsBySessionId(sessionId);
+  const enrichedCalls = [];
+  for (const call of sessionCalls) {
+    const lead = await getLeadById(call.leadId);
+    enrichedCalls.push({
+      ...call,
+      leadName: lead?.name || 'Unknown',
+      leadPhone: lead?.phone_number || 'Unknown',
+      leadCompany: lead?.company || 'Unknown',
+    });
+  }
+
+  return {
+    ...session,
+    calls: enrichedCalls,
+  };
+}
 
 // GET /dialer/sessions — list sessions for current agent (must come before :id)
 router.get('/sessions', async (req, res) => {
   try {
     const agentId = req.user.userId;
     const { status } = req.query;
+
+    if (!useInMemory) {
+      // Read from Postgres for serverless
+      const sessions = await getSessionsByAgent(agentId, status);
+      // Enrich each session with calls
+      const enriched = [];
+      for (const session of sessions) {
+        const calls = await getCallsBySessionId(session.id);
+        enriched.push({ ...session, calls });
+      }
+      return res.json({ sessions: enriched, total: enriched.length });
+    }
+
+    // In-memory fallback
+    const { getAgentSessions } = await import('../engine/DialerEngine.js');
     const sessions = getAgentSessions(agentId, status);
     res.json({ sessions, total: sessions.length });
   } catch (err) {
@@ -30,19 +74,23 @@ router.post('/sessions', dialerLimiter, async (req, res) => {
   }
 
   try {
-    console.log('[Route] POST /dialer/sessions:', { agentId, leadIds });
     const sessionState = await createSessionAndWait(agentId, leadIds);
-    console.log('[Route] Session result:', { id: sessionState?.id, status: sessionState?.status, callsCount: sessionState?.calls?.length, metrics: sessionState?.metrics });
     res.status(201).json(sessionState);
   } catch (err) {
-    console.error('[Route] POST /dialer/sessions error:', err.message);
     res.status(500).json({ detail: err.message });
   }
 });
 
-// GET /dialer/sessions/:id — get session state (polled by frontend)
-router.get('/sessions/:id', (req, res) => {
-  const state = getSessionState(req.params.id);
+// GET /dialer/sessions/:id — get session state
+router.get('/sessions/:id', async (req, res) => {
+  // Try in-memory first (for active sessions)
+  let state = getSessionState(req.params.id);
+
+  // Fall back to Postgres
+  if (!state && !useInMemory) {
+    state = await getSessionStateFromDB(req.params.id);
+  }
+
   if (!state) return res.status(404).json({ detail: 'Session not found' });
   res.json(state);
 });
