@@ -287,11 +287,48 @@ export function getSessionState(sessionId) {
 }
 
 /**
+ * Persist a call to Postgres (needed before CRM sync for FK constraints).
+ */
+async function persistCallToDB(call) {
+  if (useInMemory) return;
+  try {
+    await dalCreateCall({
+      id: call.id,
+      leadId: call.leadId,
+      sessionId: call.sessionId,
+      status: call.status,
+      callStatus: call.callStatus,
+      providerCallId: call.providerCallId,
+      startedAt: call.startedAt,
+    });
+  } catch {
+    // May already exist
+  }
+  try {
+    await dalUpdateCall(call.id, {
+      status: call.status,
+      callStatus: call.callStatus,
+      endedAt: call.endedAt,
+      recordingUrl: call.recordingUrl,
+      transcriptionText: call.transcriptionText,
+      transcriptionStatus: call.transcriptionStatus,
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Sync a completed call to the CRM and track status on the call object.
+ * Persists call to Postgres first so FK constraints are satisfied.
  */
 async function syncCrmActivity(call, session) {
   call.crmActivityStatus = 'PENDING';
   emitSessionUpdate(session);
+
+  // Persist call to DB first (CRM activities FK references calls.id)
+  await persistCallToDB(call);
+
   try {
     const activity = await createActivity(call);
     call.crmActivityId = activity.id;
@@ -310,7 +347,6 @@ async function syncCrmActivity(call, session) {
  */
 export async function createSessionAndWait(agentId, leadIds) {
   // Pre-fetch leads from DAL (Postgres) into the in-memory Map
-  // so the engine's leads.get() calls work on serverless
   for (const leadId of leadIds) {
     if (!leads.has(leadId)) {
       const lead = await getLeadById(leadId);
@@ -318,9 +354,27 @@ export async function createSessionAndWait(agentId, leadIds) {
     }
   }
 
-  const sessionState = await new Promise((resolve) => {
-    const session = createSession(agentId, leadIds);
+  // Create session in-memory
+  const session = createSession(agentId, leadIds);
 
+  // Persist session to Postgres immediately (calls FK references sessions.id)
+  if (!useInMemory) {
+    try {
+      await dalCreateSession({
+        id: session.id,
+        agentId: session.agentId,
+        leadQueue: session.leadQueue,
+        concurrency: session.concurrency,
+        status: session.status,
+        metrics: session.metrics,
+      });
+    } catch (err) {
+      console.error('[Dialer] Failed to persist session:', err.message);
+    }
+  }
+
+  // Wait for simulation to complete
+  const sessionState = await new Promise((resolve) => {
     // If session finished immediately (e.g. no valid leads)
     if (session.status === 'STOPPED') {
       setTimeout(() => resolve(getSessionState(session.id)), 300);
@@ -331,7 +385,7 @@ export async function createSessionAndWait(agentId, leadIds) {
       if (sessionId === session.id) {
         dialerEventBus.removeListener('SESSION_STOPPED', handler);
         // Small delay to let CRM sync finish
-        setTimeout(() => resolve(getSessionState(session.id)), 500);
+        setTimeout(() => resolve(getSessionState(session.id)), 1000);
       }
     };
     dialerEventBus.on('SESSION_STOPPED', handler);
@@ -346,57 +400,31 @@ export async function createSessionAndWait(agentId, leadIds) {
     }, 9000);
   });
 
-  // Persist session and calls to Postgres so subsequent requests can find them
+  // Final sync: update session state in Postgres
   if (!useInMemory && sessionState) {
-    await persistToDatabase(sessionState);
+    try {
+      await dalUpdateSession(sessionState.id, {
+        status: sessionState.status,
+        winnerCallId: sessionState.winnerCallId,
+        metrics: sessionState.metrics,
+      });
+      // Update calls with final CRM status
+      for (const call of sessionState.calls) {
+        await dalUpdateCall(call.id, {
+          status: call.status,
+          callStatus: call.callStatus,
+          endedAt: call.endedAt,
+          recordingUrl: call.recordingUrl,
+          transcriptionText: call.transcriptionText,
+          transcriptionStatus: call.transcriptionStatus,
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('[Dialer] Failed to update session in DB:', err.message);
+    }
   }
 
   return sessionState;
-}
-
-/**
- * Persist a completed session and its calls to Postgres.
- */
-async function persistToDatabase(sessionState) {
-  try {
-    // Persist session
-    await dalCreateSession({
-      id: sessionState.id,
-      agentId: sessionState.agentId,
-      leadQueue: sessionState.leadQueue,
-      concurrency: sessionState.concurrency,
-      status: sessionState.status,
-      metrics: sessionState.metrics,
-    });
-    await dalUpdateSession(sessionState.id, {
-      status: sessionState.status,
-      winnerCallId: sessionState.winnerCallId,
-      metrics: sessionState.metrics,
-    });
-
-    // Persist each call
-    for (const call of sessionState.calls) {
-      await dalCreateCall({
-        id: call.id,
-        leadId: call.leadId,
-        sessionId: call.sessionId,
-        status: call.status,
-        callStatus: call.callStatus,
-        providerCallId: call.providerCallId,
-        startedAt: call.startedAt,
-      });
-      await dalUpdateCall(call.id, {
-        status: call.status,
-        callStatus: call.callStatus,
-        endedAt: call.endedAt,
-        recordingUrl: call.recordingUrl,
-        transcriptionText: call.transcriptionText,
-        transcriptionStatus: call.transcriptionStatus,
-      });
-    }
-  } catch (err) {
-    console.error('[Dialer] Failed to persist session to DB:', err.message);
-  }
 }
 
 function emitSessionUpdate(session) {
